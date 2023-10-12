@@ -28,7 +28,7 @@ Well, of course Racket's semantics is fairly different than CL's, and it's much 
 ### Invented problems
 But what's the real problem with the package system as it is?  Well, the first answer is 'much less than people often think': if you're willing to think about package design, and in particular to think about it as a critical part of *language* design and realise that all programming is language design, then you pretty seldom run into problems that can't be solved fairly easily.  As an example of this [conduit packages](https://tfeb.github.io/conduit-packages/ "Conduit packages") lets you do a lot of things that are possible but painful in CL, as well as now providing a variant of `defpackage` which is user-extensible.
 
-Of course people like to use packages in an absolutely terrible way for reasons I can't fathom.  Generations of Lisp programmers have somehow been unable to understand that calling their package `XML`, `HTTP`, or `JSON`is not a good idea.  More generally they still seem not to understand both that the package namespace is a scarce resource whichneeds to be structured so that clashes do not happen and that there is an absolutely obvious way of doing that: domain-structured names for packages.  Then, rather than using the package system to construct the language in which they want to write, they give up and use explicit package prefixes all over the place, resulting in code which is annoyingly hard to read.  Because, even by very low standards, writing code like that is not practical with long, unique package names, we then get the whole package-local-nicknames horror: a workaround to a problem which simply never needed to exist.
+Of course people like to use packages in an absolutely terrible way for reasons I can't fathom.  Generations of Lisp programmers have somehow been unable to understand that calling their package `XML`, `HTTP` or `JSON` is not a good idea.  More generally they still seem not to understand both that the package namespace is a scarce resource which needs to be structured so that clashes do not happen and that there is an absolutely obvious way of doing that: domain-structured names for packages.  Then, rather than using the package system to construct the language in which they want to write, they give up and use explicit package prefixes all over the place, resulting in code which is annoyingly hard to read.  Because, even by very low standards, writing code like that is not practical with long, unique package names, we then get the whole package-local-nicknames horror: a workaround to a problem which simply never needed to exist.
 
 This is all just amazing.  The *whole point* of Lisp is that *it is a language in which to invent languages*: it's a language in which, to solve a problem you first design a programming language in which to solve that problem.  But somehow people have C++ envy and feel that they need to not only avoid doing the one thing Lisp is *for* but make their programs as unreadable as they can.  Oh well, whatever.
 
@@ -37,7 +37,7 @@ So, *are* there real problems?   If there are, what are they?  Are they to do wi
 
 There are real problems.  And they're two sides of the same coin.
 
-The first problem is that**symbols have many meanings which can't easily be teased apart**.  It's fashionable to talk about 'Lisp-1s', which have a single namespace for variables and functions, and 'Lisp-2s' where functions and variables have distinct namespaces.  And then people will be clever and point out that CL is in fact a Lisp-$n$ for some value of $n$ significantly greater than 2 and perhaps equal to 8: symbols in CL name at least functions, blocks, variables, classes and types, slots, catch tags, property lists and restarts and probably other things I have forgotten.
+The first problem is that **symbols have many meanings which can't easily be teased apart**.  It's fashionable to talk about 'Lisp-1s', which have a single namespace for variables and functions, and 'Lisp-2s' where functions and variables have distinct namespaces.  And then people will be clever and point out that CL is in fact a Lisp-$n$ for some value of $n$ significantly greater than 2 and perhaps equal to 8: symbols in CL name at least functions, blocks, variables, classes and types, slots, catch tags, property lists and restarts and probably other things I have forgotten.
 
 Except that's wrong: *all Lisps are Lisp-$\infty$s*.  That's true because it is always possible to add a new namespace to any Lisp, if you have a Lisp-$n$ for any $n \in \mathbb{N}$, you can always write a program which turns your Lisp-$n$ into a Lisp-$n+1$.
 
@@ -110,7 +110,7 @@ The system is `org.tfeb.toys.symbol-nicknames`.  It should be possible to load t
 In order to make the interface be more like it should be, most of the interface functions accept two arguments:
 
 - a  *nickname designator* which is either a string or a symbol;
-- an optional package designator which is a string a package, or `nil`.
+- an optional *package designator* which is a string, a package or `nil`.
 
 The semantics of the case when the nickname designator is a string or a symbol are slightly different to make things sane.
 
@@ -185,16 +185,16 @@ A nickname cannot refer to a symbol which is itself a nickname: this avoids the 
 
 `(setf nickname-symbol)` can modify the package state and create symbols.  The restarts described above are offered in case of errors.
 
-**` delete-symbol-nickname`** will remove a nickname.  It also takes a nickname designator and optional package designator arguments.  If symbol nicknames are enabled (`*use-symbol-nicknames*` is true) then it is almost always necessary to give it a nickname designator which is a string, as it's very hard to find the nickname symbol in this case (but see `map-symbol-nicknames`).
+**`delete-symbol-nickname`** will remove a nickname.  It also takes a nickname designator and optional package designator arguments.  If symbol nicknames are enabled (`*use-symbol-nicknames*` is true) then it is almost always necessary to give it a nickname designator which is a string, as it's very hard to find the nickname symbol in this case (but see `map-symbol-nicknames`).
 
 It returns true if there was a nickname, `nil` otherwise.
 
 **`map-symbol-nicknames`** maps a function over nicknames and their targets.  It takes two arguments:
 
 - a function of two arguments, the nickname symbol and its target;
-- an optional package designator, or `nil` meaning 'uninterned nicknames.
+- an optional package designator, or `nil` meaning uninterned nicknames.
 
-If the package designator is not provided all nicknames are iterated over.
+If the package designator is not provided all nicknames are iterated over.  Note that the package designator refers to the package of the nicknames, not their targets.
 
 `map-symbol-nicknames` is written in such a way that the function can freely add or remove nicknames.  Any nicknames the function adds will not be mapped over.
 
@@ -204,14 +204,16 @@ Symbol nicknames tries hard to avoid creating chains or cycles of nicknames: thi
 
 **`repair-symbol-nicknames`** will repair symbol nicknames.  It first looks for serious problems which need user intervention, and then fixes up reference counts.  It takes one optional argument, `report`: if given this should be a suitable stream designator for `format` on which a report will be printed.  It returns two values: the number of repairs and the number of nasty problems it found.
 
-The nasty problem it can find is when a nickname points at another nickname.  This should never be able to happen unless you manually manipulate the system, but it is checked anyway.  In this case `repair-symbol-nicknames` signals an error with two possible restarts
+The nasty problem it can find is when a nickname points at another nickname.  This should never be able to happen unless you manually manipulate the system, but it is checked anyway.  In this case `repair-symbol-nicknames` signals an error with two possible restarts:
 
 - `remove-nickname-source` will stop the source being a nickname and then try again;
 - `remove-nickname-target` will stop the target being a nickname and then try again.
 
 In both cases there will then be reference counts which need to be fixed, but this will happen in the next phase.
 
-## Incompatibilities with Common Lisp: `find-symbol`
+The restart names are exported from the package, so you can programmatically handle these cases if you want to.
+
+### Incompatibilities with Common Lisp: `find-symbol`
 In CL you can assume that `(find-symbol x)` will return either `nil` as its second argument or a symbol whose name is the same as the string `x` as its first argument.  That is no longer true when symbol nicknames exist.  This is inherently incompatible with CL.  Rather than just blindly ignoring the problem, the system changes the behaviour of `find-symbol` so that when it is returning the target of a nickname it returns `:nickname` as its second value:
 
 ```lisp
@@ -239,7 +241,7 @@ bar
 
 Note this only happens when the system is enabled: the bahaviour when it's disabled is standard.
 
-## Package, module, feature, dependencies
+### Package, module, feature, dependencies
 Symbol nicknames lives in `org.tfeb.toys.symbol-nicknames` and provides `:org.tfeb.toys.symbol-nicknames`.  There is an ASDF system definition for both it and its various tests: `(asdf:test-system "org.tfeb.toys.symbol-nicknames")` should work.  The system itself has no dependencies, the test systems depend on [Parachute](https://shinmera.github.io/parachute/ "Parachute").
 
 The core of the system should be portable CL.  It knows how to fully infect LispWorks and SBCL.
