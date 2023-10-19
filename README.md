@@ -104,7 +104,7 @@ This means that for a symbol $s$, with name $n(s)$ and package $p(s)$ there may 
 Implementationally this is done by a cheap hack: the pairs $(n_i(s), p_i(s))$ in fact denote symbols which the system knows are nicknames for $s$, and the reader is hooked so that, if it reads some symbol $\sigma$, it looks it up in the table of nicknames and, if it is a nickname for a symbol $s$, returns $s$ instead.  This is not how a system like this *should* work -- there should be only one symbol, not two -- but this was the easy way to make it work as a proof of concept.
 
 ### The system
-The system is `org.tfeb.toys.symbol-nicknames`.  It should be possible to load this in any conforming CL, but it only knows how to infect SBCL and LispWorks.  If you load it in another implementation you'll get a warning: all the functions below will work but the reader will not know how to do anything.
+The system is `org.tfeb.toys.symbol-nicknames`.  It should be possible to load this in any conforming CL, but it only knows how to infect SBCL, CMUCL and LispWorks.  If you load it in another implementation you'll get a warning: all the functions below will work but the reader will not know how to do anything.
 
 ### Symbols and strings
 In order to make the interface be more like it should be, most of the interface functions accept two arguments:
@@ -244,7 +244,7 @@ Note this only happens when the system is enabled: the bahaviour when it's disab
 ### Package, module, feature, dependencies
 Symbol nicknames lives in `org.tfeb.toys.symbol-nicknames` and provides `:org.tfeb.toys.symbol-nicknames`.  There is an ASDF system definition for both it and its various tests: `(asdf:test-system "org.tfeb.toys.symbol-nicknames")` should work.  The system itself has no dependencies, the test systems depend on [Parachute](https://shinmera.github.io/parachute/ "Parachute").
 
-The core of the system should be portable CL.  It knows how to fully infect LispWorks and SBCL.
+The core of the system should be portable CL.  It knows how to fully infect SBCL, CMUCL and LispWorks.
 
 ## Notes
 The function `nickname-symbol` is called that because its argument is a nickname and it is returning a symbol.   `delete-symbol-nickname` is called that because it is deleting a nickname.  `map-symbol-nicknames` should probably be called `map-nickname-symbols` but is not.
