@@ -26,6 +26,8 @@
   (make-hash-table :weak-kind ':key)
   #+SBCL
   (make-hash-table :weakness ':key)
+  #+CMUCL
+  (make-hash-table :weak-p ':key)
   #-(or LispWorks SBCL)
   (make-hash-table))
 
@@ -203,7 +205,7 @@
                    (push (cons nickname symbol) ns)))
                *nickname-symbol*)
       (dolist (e ns nil)
-        (funcall f (car e) (cdr e))))))
+        (funcall f (symbol-name (car e)) (symbol-package (car e)) ((cdr e))))))
 
 (defun repair-symbol-nicknames (&optional (report nil reportp))
   ;; Repair symbol nicknames: deal with chains by asking the user, and
