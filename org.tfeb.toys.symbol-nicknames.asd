@@ -50,6 +50,8 @@
      :if-feature :lispworks)
     (:file "infect-sbcl"
      :if-feature :sbcl)
+    (:file "infect-cmucl"
+     :if-feature :cmucl)
     (:file "infect-nobody"
      :if-feature (:not (:or :sbcl :lispworks)))))
 
