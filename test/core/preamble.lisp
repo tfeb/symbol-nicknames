@@ -40,7 +40,7 @@
     (repair-symbol-nicknames)))
 
 (defmacro with-no-symbol-nicknames (&body forms)
-  `(call/empty-symbol-nicknames (lambda () ,@forms)))
+  `(call/no-symbol-nicknames (lambda () ,@forms)))
 
 (defmacro restarting ((&key (restart-name ''continue)
                             (condition-type 'error)
