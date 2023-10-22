@@ -251,6 +251,11 @@ The function `nickname-symbol` is called that because its argument is a nickname
 
 Finally, note that symbol nicknames is a *toy*: it's a proof of concept, but not something being proposed as any kind of standard or substandard extension to CL.  Something a bit *like* it might be a possibly useful extension, but it needs frther thought.
 
+The system originated because my friend Zyni saw a [discussion on reddit](https://www.reddit.com/r/Common_Lisp/comments/14bxxvz/symbol_links_or_how_to_create_aliases/ "Symbol links").  Associated with this is another system, [symbol-links](https://github.com/Gleefre/symbol-links "symbol-links") which does something similar to this system in a slightly different way: it is more honest in the sense that it explicitly creates links between pairs of symbols rather than trying to pretend that nicknames are attributes of symbols.  I think the latter approach -- as taken by this sytem -- is better in theory but much harder to get right in practice.
+
+## Contributors
+Zyni had the original idea and persuaded me to write it.  Github user [Gleefre](https://github.com/Gleefre "Gleefre") has contributed support for CMUCL.
+
 ---
 
 ## Appendices
