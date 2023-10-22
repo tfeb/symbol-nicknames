@@ -102,7 +102,7 @@
               "repair-symbol-nicknames")
   ;; Some basic sanity
   (finish (repair-symbol-nicknames))
-  (let ((*nickname-symbol* (make-hash-table)))
+  (with-no-symbol-nicknames
     (is-values (repair-symbol-nicknames)
       (eql 0)
       (eql 0))
@@ -127,6 +127,7 @@
     (is-values (repair-symbol-nicknames)
       (eql 1)
       (eql 0))
+    ;; Check chains via the restart
     (setf (gethash 'foo *nickname-symbol*) 'bar
           (gethash 'bar *nickname-symbol*) 'bone)
     (fail (repair-symbol-nicknames))
@@ -155,6 +156,36 @@
       (eql 'bar)
       (eql t))
     (delete-symbol-nickname 'foo))
+    (is-values (repair-symbol-nicknames)
+      (eql 0)
+      (eql 0))
+    ;; Check chains via arguments
+    (setf (gethash 'foo *nickname-symbol*) 'bar
+          (gethash 'bar *nickname-symbol*) 'bone)
+    (fail (repair-symbol-nicknames))
+    (is-values (repair-symbol-nicknames :remove-nickname-sources t)
+      (eql 2)
+      (eql 1))
+    (is-values (nickname-symbol 'bar)
+      (eql 'bone)
+      (eql t))
+    (is-values (nickname-symbol 'foo)
+      (eql nil)
+      (eql nil))
+    (delete-symbol-nickname 'bar)
+    (setf (gethash 'foo *nickname-symbol*) 'bar
+          (gethash 'bar *nickname-symbol*) 'bone)
+    (fail (repair-symbol-nicknames))
+    (is-values (repair-symbol-nicknames :remove-nickname-targets t)
+      (eql 2)
+      (eql 1))
+    (is-values (nickname-symbol 'bar)
+      (eql nil)
+      (eql nil))
+    (is-values (nickname-symbol 'foo)
+      (eql 'bar)
+      (eql t))
+    (delete-symbol-nickname 'foo)
     (is-values (repair-symbol-nicknames)
       (eql 0)
       (eql 0)))

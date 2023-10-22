@@ -114,7 +114,7 @@ In order to make the interface be more like it should be, most of the interface 
 
 The semantics of the case when the nickname designator is a string or a symbol are slightly different to make things sane.
 
-- When the nickname designator is a  string, the package designator defaults to the value of `*package^`, so nicknames are created in the current package by default.  If given explicitly it should either designate a package in which the symbol will be looked up or created or be `nil`, which will create an uninterned nickname.
+- When the nickname designator is a  string, the package designator defaults to the value of `*package*`, so nicknames are created in the current package by default.  If given explicitly it should either designate a package in which the symbol will be looked up or created or be `nil`, which will create an uninterned nickname.
 - When the nickname dessignator is a symbol the package designator defaults to the home package of the symbol.  If given explicitly then it should designate a package in which the symbol is present.  If given as `nil` the symbol should be uninterned.
 
 In the symbol case where the designated package is not compatible with the symbol an error of type `package-error` is signalled.  In the case where a nickname is being created there will be a `continue` restart which will fix things up:
@@ -128,6 +128,9 @@ Interactively, the restart description describes what will be done.  You can inv
 A lot of the above complexity is to handle nicknames which are uninterned symbols.  It's hard to think of a use for these which makes all that hair worth it.
 
 The descriptions below use the terms 'nickname designator' and 'package designator' to mean what is described here.
+
+### Symbols created or interned as a result of nickname operations
+When the system interns a symbol in a package for a nickname, then it remembers it has done this.  If the nickname is later deleted the corresponding symbol will be uninterned from the package it was interened in.  This *doesn't* happen when the symbol was already either interned or otherwise accessible in a package.
 
 ### The interface
 **`*use-symbol-nicknames*`** defines whether the reader will translate symbol nicknames.  If true, it will.  The initial value is `nil`.  You can bind this locally if you know what you are doing (for instance to run tests without risking making the system uninhabitable).
@@ -202,14 +205,20 @@ If the package designator is not provided all nicknames are iterated over.  Note
 
 Symbol nicknames tries hard to avoid creating chains or cycles of nicknames: this should not be able to happen.  It does this in part by keeping a count of the nicknames a symbol has: if you try to make a symbol with a non-zero count into a nickname this fails.  However there is then the problem that a symbol which is a nickname for another symbol might get garbage-collected.`repair-symbol-nicknames` deals with this: it will fix up the reference counts to correspond to current reality.
 
-**`repair-symbol-nicknames`** will repair symbol nicknames.  It first looks for serious problems which need user intervention, and then fixes up reference counts.  It takes one optional argument, `report`: if given this should be a suitable stream designator for `format` on which a report will be printed.  It returns two values: the number of repairs and the number of nasty problems it found.
+**`repair-symbol-nicknames`** will repair symbol nicknames.  It first looks for serious problems which need user intervention, and then fixes up reference counts and deals with possible problems with orphan nicknames and packages.    it takes four keyword arguments.
 
-The nasty problem it can find is when a nickname points at another nickname.  This should never be able to happen unless you manually manipulate the system, but it is checked anyway.  In this case `repair-symbol-nicknames` signals an error with two possible restarts:
+- `report` if given should be a suitable stream designator for `format` on which a report will be printed.
+- `remove-nickname-sources` and `remove-nickname-targets` control the behaviour when chains are detected (see below).
+- `unintern-lost-nicknames` will, mean that, if a 'lost' nickname is found, cause it to be uninterned from any package it was interned in as part of its creation.  If not given the nickname will be left in its package and no longer be counted as lost.
+
+`repair-symbol-nicknames` returns two values: the number of repairs and the number of nasty problems it found.
+
+The nasty problem it can find is when a nickname points at another nickname.  This should never be able to happen unless you manually manipulate the system, but it is checked anyway.  In this case `repair-symbol-nicknames`by default signals an error with two possible restarts:
 
 - `remove-nickname-source` will stop the source being a nickname and then try again;
 - `remove-nickname-target` will stop the target being a nickname and then try again.
 
-In both cases there will then be reference counts which need to be fixed, but this will happen in the next phase.
+In both cases there will then be reference counts which need to be fixed, but this will happen in the next phase.  If one of the `remove-nickname-sources` or `remove-nickname-targets` keyword arguments is given then the appropriate action is taken automatically.
 
 The restart names are exported from the package, so you can programmatically handle these cases if you want to.
 
@@ -249,7 +258,9 @@ The core of the system should be portable CL.  It knows how to fully infect SBCL
 ## Notes
 The function `nickname-symbol` is called that because its argument is a nickname and it is returning a symbol.   `delete-symbol-nickname` is called that because it is deleting a nickname.  `map-symbol-nicknames` should probably be called `map-nickname-symbols` but is not.
 
-Finally, note that symbol nicknames is a *toy*: it's a proof of concept, but not something being proposed as any kind of standard or substandard extension to CL.  Something a bit *like* it might be a possibly useful extension, but it needs frther thought.
+`map-symbol-nicknames` should really not expose the nickname symbol but rather map over its name and package.
+
+Finally, note that symbol nicknames is a *toy*: it's a proof of concept, but not something being proposed as any kind of standard or substandard extension to CL.  Something a bit *like* it might be a possibly useful extension, but it needs further thought.  There are many cases where things that should not happen happen and things that should happen do not happen.
 
 The system originated because my friend Zyni saw a [discussion on reddit](https://www.reddit.com/r/Common_Lisp/comments/14bxxvz/symbol_links_or_how_to_create_aliases/ "Symbol links").  Associated with this is another system, [symbol-links](https://github.com/Gleefre/symbol-links "symbol-links") which does something similar to this system in a slightly different way: it is more honest in the sense that it explicitly creates links between pairs of symbols rather than trying to pretend that nicknames are attributes of symbols.  I think the latter approach -- as taken by this sytem -- is better in theory but much harder to get right in practice.
 

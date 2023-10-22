@@ -59,7 +59,10 @@
               (status
                (values s t nil))
               (modify
-               (values (intern nickname package) t t))
+               (let ((s (intern nickname package)))
+                 ;; Use the package name as essentially a weak pointer
+                 (setf (get s 'nickname-package) (package-name package))
+                 (values s t t)))
               (t
                (values nil nil nil))))
          (if modify
@@ -84,6 +87,7 @@
                             (format s "Import ~S into ~A" nickname (package-name package)))
                   :test (lambda (c) (declare (ignore c)) modify)
                   (unless already-fixed (import nickname package))
+                  (setf (get nickname 'nickname-package) (package-name package))
                   (setf did-modify t))))
              (t
               (restart-case (error
@@ -99,6 +103,7 @@
                                     s (package-name package) nickname))
                   :test (lambda (c) (declare (ignore c)) modify)
                   (unless already-fixed (shadowing-import (list nickname) package))
+                  (setf (get nickname 'nickname-package) (package-name package))
                   (setf did-modify t)))))))
         (packagep
          ;; package given as NIL
@@ -182,6 +187,12 @@
         (multiple-value-bind (target nicknamep) (gethash nickname-symbol *nickname-symbol*)
           (when nicknamep
             (remhash nickname-symbol *nickname-symbol*)
+            (let* ((n (get nickname-symbol 'nickname-package))
+                   (p (and n (find-package n))))
+              ;; If the package is gone this is probably OK.  If it's
+              ;; been renamed we're going to lose.
+              (when n (remprop nickname-symbol 'nickname-package))
+              (when p (unintern nickname-symbol p)))
             (let ((c (decf (get target 'nicknamed-by))))
               (cond
                ((zerop c)
@@ -191,6 +202,8 @@
   nil)
 
 (defun map-symbol-nicknames (f &optional (package/name nil packagep))
+  ;; map f over nickname and symbol.  Note that this exposes that the
+  ;; nickname is itself a symbol
   (declare (type (or function symbol) f)
            (type (or package string null) package/name))
   (let ((package (and package/name (find-package package/name))))
@@ -205,17 +218,36 @@
                    (push (cons nickname symbol) ns)))
                *nickname-symbol*)
       (dolist (e ns nil)
-        (funcall f (symbol-name (car e)) (symbol-package (car e)) ((cdr e))))))
+        (funcall f (car e) (cdr e))))))
 
-(defun repair-symbol-nicknames (&optional (report nil reportp))
+(defun repair-symbol-nicknames (&key (report nil reportp)
+                                     (remove-nickname-sources nil)
+                                     (remove-nickname-targets nil)
+                                     (unintern-lost-nicknames nil))
   ;; Repair symbol nicknames: deal with chains by asking the user, and
-  ;; offering suitable restarts.  Repair counts without user
-  ;; intervention. Return the number of repairs made, and the number of
-  ;; nasties found.
-  (flet ((report (control &rest args)
+  ;; offering suitable restarts.  Repair counts and some orphan
+  ;; problems without user intervention. Return the number of repairs
+  ;; made, and the number of nasties found.
+  (labels ((report (control &rest args)
            (when reportp
              (format report "~&~?~%" control args)
-             (finish-output report))))
+             (finish-output report)))
+           (remover (what nickname target)
+             (case what
+               (source
+                (lambda ()
+                  (report "removing nickname ~S which points to a nickname"
+                          nickname)
+                  (remhash nickname *nickname-symbol*)))
+               (target
+                (lambda ()
+                  (report "removing nickname ~S which is the target of a nickname"
+                          target)
+                  (remhash target *nickname-symbol*)))
+               (otherwise
+                (error "what even is ~S?" what)))))
+    (when (and remove-nickname-sources remove-nickname-targets)
+      (error "specify only one of source and target to remove automatically"))
     (let ((repairs 0)
           (nasties 0)
           (cleanup nil)
@@ -226,37 +258,35 @@
       ;; anyway).
       (tagbody
        restart
-       (when cleanup (funcall cleanup))
+       (when cleanup
+         (funcall cleanup)
+         (incf repairs)
+         (incf nasties))
        (let ((target-counts (make-hash-table)))
          (maphash
           (lambda (nickname target)
             (when (nth-value 1 (nickname-symbol target))
-              (restart-case
-                  (error "~S is a nickname for ~S, which is a nickname itself for ~S"
-                         nickname target (gethash target *nickname-symbol*))
-                (remove-nickname-source ()
-                  :report (lambda (s)
-                            (format s "remove nickname symbol ~S and restart" nickname))
-                  (setf cleanup (lambda ()
-                                  (report "removing nickname ~S which points to a nickname"
-                                          nickname)
-                                  (remhash nickname *nickname-symbol*)))
-                  (incf repairs)
-                  (incf nasties)
-                  (go restart))
-                (remove-nickname-target ()
+              (cond
+               (remove-nickname-sources
+                (setf cleanup (remover 'source nickname target)))
+               (remove-nickname-targets
+                (setf cleanup (remover 'target nickname target)))
+               (t
+                (restart-case
+                    (error "~S is a nickname for ~S, which is a nickname itself for ~S"
+                           nickname target (gethash target *nickname-symbol*))
+                  (remove-nickname-source ()
+                    :report (lambda (s)
+                              (format s "remove nickname symbol ~S and restart" nickname))
+                    (setf cleanup (remover 'source nickname target)))
+                  (remove-nickname-target ()
                   :report (lambda (s)
                             (format s "remove target symbol ~S and restart" target))
-                  (setf cleanup (lambda ()
-                                  (report "removing nickname ~S which is the target of a nickname"
-                                          target)
-                                  (remhash target *nickname-symbol*)))
-                  (incf repairs)
-                  (incf nasties)
-                  (go restart))))
+                  (setf cleanup (remover 'target nickname target))))))
+              (go restart))
             (incf (gethash target target-counts 0)))
           *nickname-symbol*)
-         ;; Now fix target counts.
+         ;; Now fix target counts and deal with orphaned nicknames
          (do-all-symbols (s)
            (let ((tc (gethash s target-counts)))
              (if tc
@@ -275,5 +305,27 @@
                    (report "~S has count ~D, should not have a count"
                            s sc)
                    (remprop s 'nicknamed-by)
-                   (incf repairs))))))))
+                   (incf repairs)))))
+           (let ((np (get s 'nickname-package)))
+             (when np
+               (let ((p (find-package np)))
+                 (cond
+                  ((and p (not (nth-value 1 (gethash s *nickname-symbol*))))
+                   ;; there's a package, but it's not a nickname any more
+                   (cond
+                    (unintern-lost-nicknames
+                     (report "uninterning lost nickname ~S from ~A"
+                             s np)
+                     (unintern s p))
+                    (t
+                     (report "forgetting lost nickname ~S in ~A"
+                             s np)))
+                    (remprop s 'nickname-package)
+                    (incf repairs))
+                  ((not p)
+                   ;; there is now no package
+                   (report "forgetting lost package ~A for ~S"
+                           np s)
+                   (remprop s 'nickname-package)
+                   (incf repairs)))))))))
       (values repairs nasties))))

@@ -72,6 +72,45 @@
         (is eql n (find-symbol (symbol-name n) p))))))
 
 (define-test ("org.tfeb.toys.symbol-nicknames/test/core/blackbox"
+              "unintern")
+  ;; Check uninterning of nicknames works properly
+  (with-no-symbol-nicknames
+    (let ((p *test-package*))
+      (with-clean-packages (p)
+        (is-values (find-symbol "FOO" p)
+          (eql nil)
+          (eql nil))
+        (setf (nickname-symbol "FOO" p) 'foo)
+        (is-values (nickname-symbol "FOO" p)
+          (eql 'foo)
+          (eql t))
+        (is eql ':internal (nth-value 1 (find-symbol "FOO" p)))
+        (delete-symbol-nickname "FOO" p)
+        (is-values (nickname-symbol "FOO" p)
+          (eql nil)
+          (eql nil))
+        (is-values (find-symbol "FOO" p)
+          (eql nil)
+          (eql nil)))
+      ;; Now intern a symbol and check it is not uninterned when the
+      ;; nickname is removed
+      (let ((n (intern "FOO" p)))
+        (is-values (find-symbol "FOO" p)
+          (eql n)
+          (eql ':internal))
+        (setf (nickname-symbol "FOO" p) 'foo)
+        (is-values (nickname-symbol "FOO" p)
+          (eql 'foo)
+          (eql t))
+        (delete-symbol-nickname "FOO" p)
+        (is-values (nickname-symbol "FOO" p)
+          (eql nil)
+          (eql nil))
+        (is-values (find-symbol "FOO" p)
+          (eql n)
+          (eql ':internal))))))
+
+(define-test ("org.tfeb.toys.symbol-nicknames/test/core/blackbox"
               "simple")
   ;; There must be more things to test
   (with-no-symbol-nicknames
